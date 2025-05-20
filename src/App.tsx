@@ -20,9 +20,31 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
+// === Pomocné funkce pro číslování ===
+const renumberSections = (
+  entries: [string, { label: string; content: string; parent?: string }][],
+  parentId: string | undefined,
+  prefix: string = "",
+  level: number = 1
+) => {
+  // Omezit na maximálně 2 úrovně (např. 1.1)
+  if (level > 2) return;
+
+  const siblings = entries
+    .filter(([_, s]) => s.parent === parentId)
+    .sort((a, b) => a[1].label.localeCompare(b[1].label, undefined, { numeric: true }));
+
+  let counter = 1;
+  for (const [id, section] of siblings) {
+    const newPrefix = prefix ? `${prefix}.${counter}` : `${counter}`;
+    section.label = `${newPrefix} ${section.label.replace(/^[\d\.]+\s/, "")}`;
+    renumberSections(entries, id, newPrefix, level + 1);
+    counter++;
+  }
+};
+
 // === Hlavní komponenta aplikace ===
 export default function App() {
-  // === Stavové proměnné ===
   const [data, setData] = useState<Record<string, { label: string, content: string; parent?: string }>>({});
   const [newLabel, setNewLabel] = useState("");
   const [parentSection, setParentSection] = useState("");
@@ -30,7 +52,6 @@ export default function App() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [isEditable, setIsEditable] = useState(false);
 
-  // === Načtení dat z Firebase ===
   useEffect(() => {
     const dataRef = ref(db, "napoveda");
     onValue(dataRef, (snapshot) => {
@@ -39,14 +60,12 @@ export default function App() {
     });
   }, []);
 
-  // === Funkce pro změnu obsahu sekce ===
   const handleChange = (id: string, value: string) => {
     const updated = { ...data, [id]: { ...data[id], content: value } };
     setData(updated);
     set(ref(db, "napoveda"), updated);
   };
 
-  // === Funkce pro smazání sekce a podsekcí ===
   const handleDelete = (id: string) => {
     const updated = { ...data };
     delete updated[id];
@@ -57,52 +76,51 @@ export default function App() {
     set(ref(db, "napoveda"), updated);
   };
 
-  // === Přepínání sbalení/rozbalení ===
   const toggleCollapse = (id: string) => {
     setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  // === Generování číslovaného štítku ===
-  const getFullLabel = (base: string, parentId?: string) => {
-    const siblings = Object.values(data).filter(d => d.parent === parentId);
-    const index = siblings.length + 1;
-    if (!parentId) return `${index}. ${base}`;
-    const parentLabel = data[parentId]?.label.match(/^\d+(\.\d+)*/)?.[0] || "0";
-    return `${parentLabel}.${index} ${base}`;
-  };
-
-  // === Přidání nové sekce ===
   const handleAddSection = () => {
     if (!newLabel.trim()) return;
+
+    // Kontrola úrovně – povolit max. 2 úrovně
+    const parent = data[parentSection];
+    if (parent) {
+      const prefix = parent.label.match(/^\d+(\.\d+)?/)?.[0];
+      if (prefix && prefix.split(".").length >= 2) {
+        alert("Nelze vytvořit více než 2 úrovně sekcí.");
+        return;
+      }
+    }
+
     const id = uuidv4();
-    const finalLabel = getFullLabel(newLabel.trim(), parentSection || undefined);
     const updated = {
       ...data,
       [id]: {
-        label: finalLabel,
+        label: newLabel.trim(),
         content: "",
         ...(parentSection ? { parent: parentSection } : {})
       }
     };
-    setData(updated);
-    set(ref(db, "napoveda"), updated);
+    const entries = Object.entries(updated);
+    renumberSections(entries, undefined);
+    const finalData = Object.fromEntries(entries);
+    setData(finalData);
+    set(ref(db, "napoveda"), finalData);
     setNewLabel("");
     setParentSection("");
   };
 
-  // === Pomocná funkce pro třídění podle číslování ===
   const labelToSortableNumber = (label: string) => {
     const match = label.match(/^\d+(\.\d+)*/);
     if (!match) return Number.MAX_VALUE;
     return match[0].split(".").reduce((acc, val, i) => acc + parseInt(val) / Math.pow(10, i * 2), 0);
   };
 
-  // === Vyhledávání podle textu ===
   const matchesSearch = (entry: { label: string; content: string }) =>
     entry.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
     entry.content.toLowerCase().includes(searchTerm.toLowerCase());
 
-  // === Filtrování odpovídajících sekcí a jejich rodičů ===
   const collectMatchingWithParents = () => {
     const result: Record<string, true> = {};
     const addWithParents = (id: string) => {
@@ -120,13 +138,11 @@ export default function App() {
     return result;
   };
 
-  // === Filtrované a seřazené sekce ===
   const visibleIds = searchTerm ? collectMatchingWithParents() : null;
   const filteredAndSortedEntries = Object.entries(data)
     .filter(([id]) => !visibleIds || visibleIds[id])
     .sort((a, b) => labelToSortableNumber(a[1].label) - labelToSortableNumber(b[1].label));
 
-  // === Vykreslení jednotlivých sekcí ===
   const renderSections = (parentId?: string) => {
     return filteredAndSortedEntries
       .filter(([_, s]) => s.parent === parentId)
@@ -138,7 +154,7 @@ export default function App() {
             </button>
             {s.label}
             {isEditable && (
-              <button onClick={() => handleDelete(id)} style={{ marginLeft: "auto", float: "right", color: "red" }}>🗑️</button>
+              <button onClick={() => handleDelete(id)} style={{ marginLeft: 10, color: "red" }}>🗑️</button>
             )}
           </h2>
           {!collapsed[id] && (
@@ -146,7 +162,8 @@ export default function App() {
               marginBottom: 10,
               padding: isEditable ? 10 : 0,
               border: isEditable ? "1px solid #ccc" : "none",
-              background: isEditable ? "white" : "transparent"
+              background: isEditable ? "white" : "transparent",
+              color: "black"
             }}>
               {isEditable ? (
                 <textarea
@@ -164,7 +181,6 @@ export default function App() {
       ));
   };
 
-  // === Vykreslení osnovy (menu) ===
   const renderOutline = (parentId?: string, depth = 0) => {
     return filteredAndSortedEntries
       .filter(([_, s]) => s.parent === parentId)
@@ -180,16 +196,14 @@ export default function App() {
       ));
   };
 
-  // === Vykreslení celé stránky ===
   return (
-    <div style={{ display: "flex", fontFamily: "Arial, sans-serif", backgroundColor: "#1e1e1e", color: "#f0f0f0" }}>
-      {/* Levý panel */}
+    <div style={{ display: "flex", fontFamily: "Arial, sans-serif", backgroundColor: "#fff", color: "#000" }}>
       <div
         style={{
           width: 250,
           position: "fixed",
           height: "100vh",
-          backgroundColor: "#1e1e1e",
+          backgroundColor: "#f4f4f4",
           padding: 20,
           overflowY: "auto",
           borderRight: "1px solid #ccc"
@@ -208,7 +222,6 @@ export default function App() {
         </ul>
       </div>
 
-      {/* Pravý panel */}
       <div
         style={{
           marginLeft: 270,
@@ -221,7 +234,6 @@ export default function App() {
           {isEditable ? "🔒 Zamknout editaci" : "🔓 Odemknout editaci"}
         </button>
 
-        {/* Formulář pro přidání nové sekce */}
         <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 30 }}>
           <input
             type="text"
@@ -253,7 +265,6 @@ export default function App() {
           </button>
         </div>
 
-        {/* Výpis všech sekcí */}
         {renderSections()}
       </div>
     </div>
