@@ -1,10 +1,11 @@
+// === Importy a Firebase ===
 import { useEffect, useState } from "react";
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, onValue, set } from "firebase/database";
 import { v4 as uuidv4 } from "uuid";
 import { getAnalytics } from "firebase/analytics";
 
-
+// === Firebase konfigurace ===
 const firebaseConfig = {
   apiKey: "AIzaSyATOd1zv1yjTgZuxoj1hIJq4v2fjsbcMZ8",
   authDomain: "coalios-napoveda.firebaseapp.com",
@@ -15,10 +16,13 @@ const firebaseConfig = {
   appId: "1:592933271316:web:8c0c64155aa20f8955b401",
   measurementId: "G-X8M20GY8MG"
 };
+
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
+// === Hlavní komponenta aplikace ===
 export default function App() {
+  // === Stavové proměnné ===
   const [data, setData] = useState<Record<string, { label: string, content: string; parent?: string }>>({});
   const [newLabel, setNewLabel] = useState("");
   const [parentSection, setParentSection] = useState("");
@@ -26,6 +30,7 @@ export default function App() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [isEditable, setIsEditable] = useState(false);
 
+  // === Načtení dat z Firebase ===
   useEffect(() => {
     const dataRef = ref(db, "napoveda");
     onValue(dataRef, (snapshot) => {
@@ -34,12 +39,14 @@ export default function App() {
     });
   }, []);
 
+  // === Funkce pro změnu obsahu sekce ===
   const handleChange = (id: string, value: string) => {
     const updated = { ...data, [id]: { ...data[id], content: value } };
     setData(updated);
     set(ref(db, "napoveda"), updated);
   };
 
+  // === Funkce pro smazání sekce a podsekcí ===
   const handleDelete = (id: string) => {
     const updated = { ...data };
     delete updated[id];
@@ -50,10 +57,12 @@ export default function App() {
     set(ref(db, "napoveda"), updated);
   };
 
+  // === Přepínání sbalení/rozbalení ===
   const toggleCollapse = (id: string) => {
     setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
+  // === Generování číslovaného štítku ===
   const getFullLabel = (base: string, parentId?: string) => {
     const siblings = Object.values(data).filter(d => d.parent === parentId);
     const index = siblings.length + 1;
@@ -62,6 +71,7 @@ export default function App() {
     return `${parentLabel}.${index} ${base}`;
   };
 
+  // === Přidání nové sekce ===
   const handleAddSection = () => {
     if (!newLabel.trim()) return;
     const id = uuidv4();
@@ -80,16 +90,19 @@ export default function App() {
     setParentSection("");
   };
 
+  // === Pomocná funkce pro třídění podle číslování ===
   const labelToSortableNumber = (label: string) => {
     const match = label.match(/^\d+(\.\d+)*/);
     if (!match) return Number.MAX_VALUE;
     return match[0].split(".").reduce((acc, val, i) => acc + parseInt(val) / Math.pow(10, i * 2), 0);
   };
 
+  // === Vyhledávání podle textu ===
   const matchesSearch = (entry: { label: string; content: string }) =>
     entry.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
     entry.content.toLowerCase().includes(searchTerm.toLowerCase());
 
+  // === Filtrování odpovídajících sekcí a jejich rodičů ===
   const collectMatchingWithParents = () => {
     const result: Record<string, true> = {};
     const addWithParents = (id: string) => {
@@ -107,12 +120,13 @@ export default function App() {
     return result;
   };
 
+  // === Filtrované a seřazené sekce ===
   const visibleIds = searchTerm ? collectMatchingWithParents() : null;
-
   const filteredAndSortedEntries = Object.entries(data)
     .filter(([id]) => !visibleIds || visibleIds[id])
     .sort((a, b) => labelToSortableNumber(a[1].label) - labelToSortableNumber(b[1].label));
 
+  // === Vykreslení jednotlivých sekcí ===
   const renderSections = (parentId?: string) => {
     return filteredAndSortedEntries
       .filter(([_, s]) => s.parent === parentId)
@@ -124,7 +138,7 @@ export default function App() {
             </button>
             {s.label}
             {isEditable && (
-              <button onClick={() => handleDelete(id)} style={{ marginLeft: 10, color: "red" }}>🗑️</button>
+              <button onClick={() => handleDelete(id)} style={{ marginLeft: "auto", float: "right", color: "red" }}>🗑️</button>
             )}
           </h2>
           {!collapsed[id] && (
@@ -135,11 +149,11 @@ export default function App() {
               background: isEditable ? "white" : "transparent"
             }}>
               {isEditable ? (
-              <textarea
-              value={s.content}
-              onChange={(e) => handleChange(id, e.target.value)}
-              style={{ width: "100%", height: 100, padding: 10, border: "none", resize: "vertical" }}
-            />
+                <textarea
+                  value={s.content}
+                  onChange={(e) => handleChange(id, e.target.value)}
+                  style={{ width: "100%", height: 100, padding: 10, border: "none", resize: "vertical" }}
+                />
               ) : (
                 <div style={{ whiteSpace: "pre-wrap", padding: 5 }}>{s.content}</div>
               )}
@@ -150,6 +164,7 @@ export default function App() {
       ));
   };
 
+  // === Vykreslení osnovy (menu) ===
   const renderOutline = (parentId?: string, depth = 0) => {
     return filteredAndSortedEntries
       .filter(([_, s]) => s.parent === parentId)
@@ -165,14 +180,16 @@ export default function App() {
       ));
   };
 
+  // === Vykreslení celé stránky ===
   return (
-    <div style={{ display: "flex", fontFamily: "Arial, sans-serif" }}>
+    <div style={{ display: "flex", fontFamily: "Arial, sans-serif", backgroundColor: "#1e1e1e", color: "#f0f0f0" }}>
+      {/* Levý panel */}
       <div
         style={{
           width: 250,
           position: "fixed",
           height: "100vh",
-          backgroundColor: "#f4f4f4",
+          backgroundColor: "#1e1e1e",
           padding: 20,
           overflowY: "auto",
           borderRight: "1px solid #ccc"
@@ -191,6 +208,7 @@ export default function App() {
         </ul>
       </div>
 
+      {/* Pravý panel */}
       <div
         style={{
           marginLeft: 270,
@@ -203,6 +221,7 @@ export default function App() {
           {isEditable ? "🔒 Zamknout editaci" : "🔓 Odemknout editaci"}
         </button>
 
+        {/* Formulář pro přidání nové sekce */}
         <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 30 }}>
           <input
             type="text"
@@ -234,6 +253,7 @@ export default function App() {
           </button>
         </div>
 
+        {/* Výpis všech sekcí */}
         {renderSections()}
       </div>
     </div>
