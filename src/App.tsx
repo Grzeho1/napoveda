@@ -135,14 +135,16 @@ export default function App() {
               padding: isEditable ? 10 : 0,
               border: isEditable ? "1px solid #ccc" : "none",
               background: isEditable ? "white" : "transparent",
-              color: "black"
+              color: "black",
+              paddingLeft: isEditable ? 10: 35
             }}>
               {isEditable ? (
                 <ReactQuill
                 theme="snow"
                 value={s.content}
                 onChange={(value) => handleChange(id, value)}
-                style={{ background: "white", color: "black" }}
+                style={{ background: "white", color: "black" ,paddingLeft:10}}
+                
               />
               
               ) : (
@@ -301,7 +303,7 @@ export default function App() {
 
         </div>
 
-        <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 30 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 30, justifyContent: "space-between"}}>
           <input
             type="text"
             placeholder="Název nové sekce"
