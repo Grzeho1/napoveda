@@ -4,46 +4,14 @@ import { initializeApp } from "firebase/app";
 import { getDatabase, ref, onValue, set } from "firebase/database";
 import { v4 as uuidv4 } from "uuid";
 import { getAnalytics } from "firebase/analytics";
+import ReactQuill from "react-quill";
+import "react-quill/dist/quill.snow.css";
+import {db} from "./firebase";
+import { renumberSections } from "./utils/renumberSections";
+import { labelToSortableNumber } from "./utils/sorting";
 
-// === Firebase konfigurace ===
-const firebaseConfig = {
-  apiKey: "AIzaSyATOd1zv1yjTgZuxoj1hIJq4v2fjsbcMZ8",
-  authDomain: "coalios-napoveda.firebaseapp.com",
-  databaseURL: "https://coalios-napoveda-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "coalios-napoveda",
-  storageBucket: "coalios-napoveda.firebasestorage.app",
-  messagingSenderId: "592933271316",
-  appId: "1:592933271316:web:8c0c64155aa20f8955b401",
-  measurementId: "G-X8M20GY8MG"
-};
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-
-// === Pomocné funkce pro číslování ===
-const renumberSections = (
-  entries: [string, { label: string; content: string; parent?: string }][],
-  parentId: string | undefined,
-  prefix: string = "",
-  level: number = 1
-) => {
-  // Omezit na maximálně 2 úrovně (např. 1.1)
-  if (level > 2) return;
-
-  const siblings = entries
-    .filter(([_, s]) => s.parent === parentId)
-    .sort((a, b) => a[1].label.localeCompare(b[1].label, undefined, { numeric: true }));
-
-  let counter = 1;
-  for (const [id, section] of siblings) {
-    const newPrefix = prefix ? `${prefix}.${counter}` : `${counter}`;
-    section.label = `${newPrefix} ${section.label.replace(/^[\d\.]+\s/, "")}`;
-    renumberSections(entries, id, newPrefix, level + 1);
-    counter++;
-  }
-};
-
-// === Hlavní komponenta aplikace ===
+// === Hlavní komponenta ===
 export default function App() {
   const [data, setData] = useState<Record<string, { label: string, content: string; parent?: string }>>({});
   const [newLabel, setNewLabel] = useState("");
@@ -51,6 +19,16 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [isEditable, setIsEditable] = useState(false);
+
+  const collapseAll = () => {
+    const all = Object.keys(data).reduce((acc, id) => ({ ...acc, [id]: true }), {});
+    setCollapsed(all);
+  };
+
+  const expandAll = () => {
+    const all = Object.keys(data).reduce((acc, id) => ({ ...acc, [id]: false }), {});
+    setCollapsed(all);
+  };
 
   useEffect(() => {
     const dataRef = ref(db, "napoveda");
@@ -83,7 +61,6 @@ export default function App() {
   const handleAddSection = () => {
     if (!newLabel.trim()) return;
 
-    // Kontrola úrovně – povolit max. 2 úrovně
     const parent = data[parentSection];
     if (parent) {
       const prefix = parent.label.match(/^\d+(\.\d+)?/)?.[0];
@@ -111,11 +88,6 @@ export default function App() {
     setParentSection("");
   };
 
-  const labelToSortableNumber = (label: string) => {
-    const match = label.match(/^\d+(\.\d+)*/);
-    if (!match) return Number.MAX_VALUE;
-    return match[0].split(".").reduce((acc, val, i) => acc + parseInt(val) / Math.pow(10, i * 2), 0);
-  };
 
   const matchesSearch = (entry: { label: string; content: string }) =>
     entry.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -166,13 +138,18 @@ export default function App() {
               color: "black"
             }}>
               {isEditable ? (
-                <textarea
-                  value={s.content}
-                  onChange={(e) => handleChange(id, e.target.value)}
-                  style={{ width: "100%", height: 100, padding: 10, border: "none", resize: "vertical" }}
-                />
+                <ReactQuill
+                theme="snow"
+                value={s.content}
+                onChange={(value) => handleChange(id, value)}
+                style={{ background: "white", color: "black" }}
+              />
+              
               ) : (
-                <div style={{ whiteSpace: "pre-wrap", padding: 5 }}>{s.content}</div>
+                <div
+  style={{ padding: 5 }}
+  dangerouslySetInnerHTML={{ __html: s.content }}
+/>
               )}
               {renderSections(id)}
             </div>
@@ -180,6 +157,26 @@ export default function App() {
         </section>
       ));
   };
+
+  /**
+   * Exportuje obsah do HTML souboru.
+   */
+  const exportToHTML = () => {
+    const htmlContent = Object.entries(data)
+      .sort((a, b) => labelToSortableNumber(a[1].label) - labelToSortableNumber(b[1].label))
+      .map(([_, section]) => `<h2>${section.label}</h2>${section.content}`)
+      .join("<hr>");
+  
+    const blob = new Blob([`<html><body>${htmlContent}</body></html>`], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "napoveda.html";
+    link.click();
+  };
+
+
+  
 
   const renderOutline = (parentId?: string, depth = 0) => {
     return filteredAndSortedEntries
@@ -195,6 +192,18 @@ export default function App() {
         </li>
       ));
   };
+
+  const btnStyle = {
+    backgroundColor: "#495057",
+    color: "white",
+    padding: "10px 20px",
+    border: "none",
+    borderRadius: "8px",
+    cursor: "pointer",
+    boxShadow: "0 2px 5px rgba(0,0,0,0.2)",
+    transition: "background-color 0.3s"
+  };
+  
 
   return (
     <div style={{ display: "flex", fontFamily: "Arial, sans-serif", backgroundColor: "#fff", color: "#000" }}>
@@ -222,6 +231,10 @@ export default function App() {
         </ul>
       </div>
 
+        {/* Main kontent */}
+
+
+
       <div
         style={{
           marginLeft: 270,
@@ -230,9 +243,63 @@ export default function App() {
         }}
       >
         <h1 style={{ fontSize: "32px", marginBottom: 20 }}>Nápověda</h1>
-        <button onClick={() => setIsEditable(!isEditable)} style={{ marginBottom: 20 }}>
-          {isEditable ? "🔒 Zamknout editaci" : "🔓 Odemknout editaci"}
-        </button>
+        <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+        
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 20 }}>
+  {/* Levá */}
+  <div style={{ display: "flex", gap: 10 }}>
+    <button
+      onClick={collapseAll}
+      style={btnStyle}
+      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#6c757d")}
+      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#495057")}
+    >
+      🔽 Sbalit vše
+    </button>
+
+    <button
+      onClick={expandAll}
+      style={btnStyle}
+      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#6c757d")}
+      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#495057")}
+    >
+      🔼 Rozbalit vše
+    </button>
+
+    <button
+      onClick={exportToHTML}
+      style={btnStyle}
+      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#6c757d")}
+      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#495057")}
+    >
+      📄 Exportovat do HTML
+    </button>
+  </div>
+
+  {/* Pravá strana  */}
+  <button
+    onClick={() => setIsEditable(!isEditable)}
+    style={{
+      backgroundColor: isEditable ? "#9d0208" : "#006400",
+      color: "#fff",
+      padding: "11px 18px",
+      border: "none",
+      borderRadius: "6px",
+      cursor: "pointer",
+      fontSize: "16px",
+      transition: "background-color 0.3s ease",
+      boxShadow: "0 2px 6px rgba(0, 0, 0, 0.15)"
+      
+    }}
+  >
+    {isEditable ? "🔒 Zamknout editaci" : "🔓 Odemknout editaci"}
+  </button>
+</div>
+
+
+
+        </div>
 
         <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 30 }}>
           <input
@@ -251,6 +318,7 @@ export default function App() {
           >
             <option value="">(Bez nadřazené sekce)</option>
             {Object.entries(data)
+              .filter(([_, s]) => !s.parent) // Jen první úroveň
               .sort((a, b) => labelToSortableNumber(a[1].label) - labelToSortableNumber(b[1].label))
               .map(([id, s]) => (
                 <option key={id} value={id}>{s.label}</option>
