@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, onValue, set } from "firebase/database";
+import {getStorage} from "firebase/storage";
 import { v4 as uuidv4 } from "uuid";
 import { getAnalytics } from "firebase/analytics";
 import ReactQuill from "react-quill";
@@ -9,6 +10,8 @@ import "react-quill/dist/quill.snow.css";
 import {db} from "./firebase";
 import { renumberSections } from "./utils/renumberSections";
 import { labelToSortableNumber } from "./utils/sorting";
+import Popup from "./components/popup"; 
+import ConfirmDialog from "./components/confirmPopup";
 
 
 // === Hlavní komponenta ===
@@ -19,6 +22,7 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [isEditable, setIsEditable] = useState(false);
+  const [popupMessage, setPopupMessage] = useState<React.ReactNode | null>(null);
 
   const collapseAll = () => {
     const all = Object.keys(data).reduce((acc, id) => ({ ...acc, [id]: true }), {});
@@ -44,18 +48,42 @@ export default function App() {
     set(ref(db, "napoveda"), updated);
   };
 
+  // const handleDelete = (id: string) => {
+  //   const updated = { ...data };
+  //   delete updated[id];
+  //   Object.keys(updated).forEach((key) => {
+  //     if (updated[key].parent === id) delete updated[key];
+  //   });
+  //   setData(updated);
+  //   set(ref(db, "napoveda"), updated);
+   
+  // };
+
   const handleDelete = (id: string) => {
-    const updated = { ...data };
-    delete updated[id];
-    Object.keys(updated).forEach((key) => {
-      if (updated[key].parent === id) delete updated[key];
-    });
-    setData(updated);
-    set(ref(db, "napoveda"), updated);
+    setPopupMessage(
+      <ConfirmDialog
+        message="Opravdu chcete tuto sekci a její podsekce smazat?"
+        onConfirm={() => {
+          const updated = { ...data };
+          delete updated[id];
+          Object.keys(updated).forEach((key) => {
+            if (updated[key].parent === id) delete updated[key];
+          });
+          setData(updated);
+          set(ref(db, "napoveda"), updated);
+          setPopupMessage(null);
+        }}
+        onCancel={() => setPopupMessage(null)}
+      />
+    );
   };
+  
+
+  
 
   const toggleCollapse = (id: string) => {
     setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
+   
   };
 
   const handleAddSection = () => {
@@ -65,7 +93,7 @@ export default function App() {
     if (parent) {
       const prefix = parent.label.match(/^\d+(\.\d+)?/)?.[0];
       if (prefix && prefix.split(".").length >= 2) {
-        alert("Nelze vytvořit více než 2 úrovně sekcí.");
+        setPopupMessage("Nelze vytvořit více než 2 úrovně sekcí.");
         return;
       }
     }
@@ -126,7 +154,7 @@ export default function App() {
             </button>
             {s.label}
             {isEditable && (
-              <button onClick={() => handleDelete(id)} style={{ marginLeft: 10, color: "red" }}>🗑️</button>
+              <button onClick={() => handleDelete(id)} style={{ marginLeft:20, color: "red" }}>❌</button>
             )}
           </h2>
           {!collapsed[id] && (
@@ -236,7 +264,6 @@ export default function App() {
         {/* Main kontent */}
 
 
-
       <div
         style={{
           marginLeft: 270,
@@ -249,55 +276,68 @@ export default function App() {
         
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 20 }}>
+
+
+    {/* === Vlastní popup === */}
+        {popupMessage && (
+          <Popup
+            message={popupMessage}
+            onClose={() => setPopupMessage(null)}
+          />
+        )}
+
+
   {/* Levá */}
-  <div style={{ display: "flex", gap: 10 }}>
-    <button
-      onClick={collapseAll}
-      style={btnStyle}
-      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#6c757d")}
-      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#495057")}
-    >
-      🔽 Sbalit vše
-    </button>
 
-    <button
-      onClick={expandAll}
-      style={btnStyle}
-      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#6c757d")}
-      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#495057")}
-    >
-      🔼 Rozbalit vše
-    </button>
 
-    <button
-      onClick={exportToHTML}
-      style={btnStyle}
-      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#6c757d")}
-      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#495057")}
-    >
-      📄 Exportovat do HTML
-    </button>
-  </div>
+      <div style={{ display: "flex", gap: 10 }}>
+        <button
+          onClick={collapseAll}
+          style={btnStyle}
+          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#6c757d")}
+          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#495057")}
+        >
+          🔽 Sbalit vše
+        </button>
 
-  {/* Pravá strana  */}
-  <button
-    onClick={() => setIsEditable(!isEditable)}
-    style={{
-      backgroundColor: isEditable ? "#9d0208" : "#006400",
-      color: "#fff",
-      padding: "11px 18px",
-      border: "none",
-      borderRadius: "6px",
-      cursor: "pointer",
-      fontSize: "16px",
-      transition: "background-color 0.3s ease",
-      boxShadow: "0 2px 6px rgba(0, 0, 0, 0.15)"
-      
-    }}
-  >
-    {isEditable ? "🔒 Zamknout editaci" : "🔓 Odemknout editaci"}
-  </button>
-</div>
+        <button
+          onClick={expandAll}
+          style={btnStyle}
+          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#6c757d")}
+          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#495057")}
+        >
+          🔼 Rozbalit vše
+        </button>
+
+        <button
+          onClick={exportToHTML}
+          style={btnStyle}
+          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#6c757d")}
+          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#495057")}
+        >
+          📄 Exportovat do HTML
+        </button>
+      </div>
+
+      {/* Pravá strana  */}
+      <button
+        onClick={() => setIsEditable(!isEditable)}
+        style={{
+          backgroundColor: isEditable ? "#9d0208" : "#006400",
+          color: "#fff",
+          padding: "11px 18px",
+          border: "none",
+          borderRadius: "6px",
+          cursor: "pointer",
+          fontSize: "16px",
+          transition: "background-color 0.3s ease",
+          boxShadow: "0 2px 6px rgba(0, 0, 0, 0.15)"
+          
+        }}
+      >
+        {isEditable ? "🔒 Zamknout editaci" : "🔓 Odemknout editaci"}
+      </button>
+    </div>
 
 
 
