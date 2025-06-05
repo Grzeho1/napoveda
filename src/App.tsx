@@ -153,8 +153,8 @@ export default function App() {
     return filteredAndSortedEntries
       .filter(([_, s]) => s.parent === parentId)
       .map(([id, s]) => (
-        <section key={id} id={id} style={{ marginBottom: 30, paddingLeft: parentId ? 20 : 0 }}>
-          <h2 style={{ fontSize: parentId ? 23:30 ,marginBottom: 5, fontWeight: parentId ? "normal" : "bold" }}>
+        <section key={id} id={id} style={{ marginBottom: 30, paddingLeft: parentId ? 25 : 0 }}>
+          <h2 style={{ fontSize: parentId ? 25:25 ,marginBottom: 5, fontWeight: parentId ? "normal" : "bold" }}>
             <button onClick={() => toggleCollapse(id)} style={{ marginRight: 10 }}>
               {collapsed[id] ? "+" : "−"}
             </button>
@@ -163,7 +163,7 @@ export default function App() {
     value={s.label}
     onChange={(e) => handleLableChange(id, e.target.value)}
     style={{
-      fontSize: parentId ? 18 : 24,
+      fontSize: parentId ? 18 : 25,
       fontWeight: parentId ? "normal" : "bold",
       border: "none",
       background: "transparent",
@@ -270,7 +270,9 @@ export default function App() {
           borderRight: "1px solid #ccc"
         }}
       >
-        <h2 style={{ fontSize: "20px", marginBottom: 10 }}>Osnova</h2>
+
+        {/* Vyhledávač */}
+        <h2 style={{ fontSize: "20px", marginBottom: 10 }}></h2>
         <input
           type="text"
           placeholder="Vyhledat..."
@@ -300,7 +302,7 @@ export default function App() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 20 }}>
 
 
-    {/* === Vlastní popup === */}
+    {/* === popup === */}
         {popupMessage && (
           <Popup
             message={popupMessage}
