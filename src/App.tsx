@@ -23,6 +23,7 @@ export default function App() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [isEditable, setIsEditable] = useState(false);
   const [popupMessage, setPopupMessage] = useState<React.ReactNode | null>(null);
+  
 
   const collapseAll = () => {
     const all = Object.keys(data).reduce((acc, id) => ({ ...acc, [id]: true }), {});
@@ -44,6 +45,12 @@ export default function App() {
 
   const handleChange = (id: string, value: string) => {
     const updated = { ...data, [id]: { ...data[id], content: value } };
+    setData(updated);
+    set(ref(db, "napoveda"), updated);
+  };
+
+  const handleLableChange = (id: string, newLabel: string) => {
+    const updated = { ...data, [id]: { ...data[id], label: newLabel } };
     setData(updated);
     set(ref(db, "napoveda"), updated);
   };
@@ -79,7 +86,6 @@ export default function App() {
   };
   
 
-  
 
   const toggleCollapse = (id: string) => {
     setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -148,11 +154,27 @@ export default function App() {
       .filter(([_, s]) => s.parent === parentId)
       .map(([id, s]) => (
         <section key={id} id={id} style={{ marginBottom: 30, paddingLeft: parentId ? 20 : 0 }}>
-          <h2 style={{ fontSize: 20, marginBottom: 5 }}>
+          <h2 style={{ fontSize: parentId ? 23:30 ,marginBottom: 5, fontWeight: parentId ? "normal" : "bold" }}>
             <button onClick={() => toggleCollapse(id)} style={{ marginRight: 10 }}>
               {collapsed[id] ? "+" : "−"}
             </button>
-            {s.label}
+            {isEditable ? (
+  <input
+    value={s.label}
+    onChange={(e) => handleLableChange(id, e.target.value)}
+    style={{
+      fontSize: parentId ? 18 : 24,
+      fontWeight: parentId ? "normal" : "bold",
+      border: "none",
+      background: "transparent",
+      outline: "none",
+      width: "auto"
+    }}
+  />
+) : (
+  <span>{s.label}</span>
+)}
+
             {isEditable && (
               <button onClick={() => handleDelete(id)} style={{ marginLeft:20, color: "red" }}>❌</button>
             )}
@@ -164,7 +186,7 @@ export default function App() {
               border: isEditable ? "1px solid #ccc" : "none",
               background: isEditable ? "white" : "transparent",
               color: "black",
-              paddingLeft: isEditable ? 10: 35
+              paddingLeft: isEditable ? 10: 20
             }}>
               {isEditable ? (
                 <ReactQuill
@@ -315,7 +337,7 @@ export default function App() {
           onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#6c757d")}
           onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#495057")}
         >
-          📄 Exportovat do HTML
+          📝 Exportovat do HTML
         </button>
       </div>
 
